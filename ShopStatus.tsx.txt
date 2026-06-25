@@ -1,0 +1,597 @@
+import React, { useState, useEffect } from "react";
+import { checkShopStatus, getHolidays, Holiday } from "../utils/shopStatus";
+import {
+  Clock,
+  Phone,
+  Bell,
+  ShieldCheck,
+  AlertTriangle,
+  AlertCircle,
+  Calendar,
+  MessageSquare,
+} from "lucide-react";
+import { useCart } from "../hooks/useCart";
+import { Link } from "wouter";
+
+export function formatCountdown(seconds: number): string {
+  const safeSeconds = Math.max(0, seconds);
+  const hrs = Math.floor(safeSeconds / 3600);
+  const mins = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
+  return [hrs, mins, secs].map((v) => String(v).padStart(2, "0")).join(":");
+}
+
+export function ShopStatusBar() {
+  const [status, setStatus] = useState(() => checkShopStatus());
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStatus(checkShopStatus());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const { isOpen, countdownSeconds, nextOpenStr, type, holidayReason } = status;
+
+  return (
+    <div
+      className={`w-full text-white text-xs md:text-sm font-bold border-b ${
+        isOpen
+          ? "bg-emerald-600 border-emerald-500"
+          : type === "holiday"
+          ? "bg-amber-600 border-amber-500"
+          : "bg-[#0a2351] border-amber-500/30"
+      }`}
+    >
+      <div className="container max-w-7xl mx-auto px-4 py-3 flex flex-col md:flex-row items-center justify-between gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-center md:justify-start">
+          <Clock className={`w-4 h-4 shrink-0 animate-pulse ${isOpen ? "text-emerald-300" : "text-amber-400"}`} />
+          <span>
+            {isOpen ? (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-300 animate-pulse" />
+                <strong>GURU NANAK OIL: OPEN NOW</strong> (9:00 AM - 8:00 PM)
+              </span>
+            ) : type === "holiday" ? (
+              <span>
+                <strong>🔴 FESTIVAL BREAK:</strong> {holidayReason || "Closed for Holiday"}
+              </span>
+            ) : type === "sunday" ? (
+              <span>
+                <strong>🔴 SUNDAY CLOSED:</strong> We reopen tomorrow 9:00 AM
+              </span>
+            ) : (
+              <span>
+                <strong>🔴 SHOP CLOSED:</strong> Next Open: <strong>{nextOpenStr}</strong>
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="flex items-center gap-4 flex-wrap justify-center">
+          {!isOpen && countdownSeconds > 0 && (
+            <span className="font-mono bg-black/20 px-2.5 py-1 rounded text-white">
+              Opens In: <span>{formatCountdown(countdownSeconds)}</span>
+            </span>
+          )}
+          {isOpen ? (
+            <span className="text-emerald-100 text-xs font-semibold bg-white/10 px-3 py-1 rounded-full">
+              Orders placed now will dispatch today!
+            </span>
+          ) : (
+            <span className="text-amber-100 text-xs font-semibold bg-white/10 px-3 py-1 rounded-full">
+              Orders accepted 24/7 • Shipped tomorrow morning
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface PreOrderModalProps {
+  onClose: () => void;
+  preselectedProduct?: string;
+  preselectedQty?: string;
+}
+
+export function PreOrderModal({ onClose, preselectedProduct = "", preselectedQty = "" }: PreOrderModalProps) {
+  const [name, setName] = useState(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("preorder_name") || "" : "";
+  });
+  const [phone, setPhone] = useState(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("preorder_phone") || "" : "";
+  });
+  const [address, setAddress] = useState(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("preorder_address") || "" : "";
+  });
+  const [paymentMethod, setPaymentMethod] = useState<"cod" | "upi" | "card">("cod");
+  const [isSuccess, setIsSuccess] = useState(false);
+  const [bookingId, setBookingId] = useState("");
+  const [selectedItems, setSelectedItems] = useState<
+    { id: string; name: string; price: number; quantity: number; unit: string; image?: string }[]
+  >([]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const loadPreorderItems = () => {
+        const itemsJson = localStorage.getItem("preorder_selected_items");
+        if (itemsJson) {
+          try {
+            setSelectedItems(JSON.parse(itemsJson));
+          } catch (e) {}
+        }
+      };
+      loadPreorderItems();
+      window.addEventListener("preorder_items_updated", loadPreorderItems);
+      return () => window.removeEventListener("preorder_items_updated", loadPreorderItems);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preorder_name", name);
+    }
+  }, [name]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preorder_phone", phone);
+    }
+  }, [phone]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("preorder_address", address);
+    }
+  }, [address]);
+
+  const subtotal = selectedItems.reduce((acc, item) => acc + item.price * item.quantity, 0);
+  const grandTotal = subtotal > 0 ? subtotal + 30 : 0;
+
+  const handlePreOrderSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name?.trim() || !phone?.trim() || !address?.trim()) {
+      alert("Please fill out Name, Mobile Number, and Delivery Address.");
+      return;
+    }
+    if (selectedItems.length === 0) {
+      alert("Please select at least one product from our Catalog to place a pre-order.");
+      return;
+    }
+
+    const bId = "ORD" + Date.now().toString() + Math.floor(Math.random() * 1000);
+    const orderData = {
+      orderId: bId,
+      date: new Date().toISOString(),
+      items: selectedItems.map((item) => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        unit: item.unit || "Litre",
+        brand: "Selected Brand",
+      })),
+      subtotal: subtotal,
+      deliveryCharge: 30,
+      urgentCharge: 0,
+      grandTotal: grandTotal,
+      paymentMethod,
+      area: "Dewas Local Delivery",
+      address: `Name: ${name}, Phone: ${phone}. Address: ${address}`,
+      isScheduled: true,
+      isUrgent: false,
+      scheduledInfo: "Booking Date: Next Operational Hours",
+      statusMessage: "Aapka Product book ho gya hai aur shop ke business hours mein dispatch hoga.",
+      customerName: name,
+      customerPhone: phone,
+      isPreOrderBookNow: true,
+      paymentStatus: paymentMethod === "cod" ? "PENDING_COD" : "PAID_ONLINE",
+    };
+
+    try {
+      const orders = JSON.parse(localStorage.getItem("guru_nanak_orders") || "[]");
+      orders.push(orderData);
+      localStorage.setItem("guru_nanak_orders", JSON.stringify(orders));
+      localStorage.setItem("guru_nanak_latest_order", JSON.stringify(orderData));
+      localStorage.removeItem("preorder_selected_items");
+
+      const notifications = JSON.parse(localStorage.getItem("guru_nanak_admin_notifications") || "[]");
+      notifications.push({
+        id: bId,
+        title: "📦 Pre-Order & Paid Booking",
+        customer: name,
+        detail: `Booked ${selectedItems.length} items (Total: ₹${grandTotal})`,
+        time: new Date().toISOString(),
+        unread: true,
+      });
+      localStorage.setItem("guru_nanak_admin_notifications", JSON.stringify(notifications));
+      window.dispatchEvent(new Event("preorder_items_updated"));
+    } catch (e) {}
+
+    setBookingId(bId);
+    setIsSuccess(true);
+  };
+
+  const handleWhatsAppShare = () => {
+    const itemsListStr = selectedItems.map((it) => `-${it.name} x ${it.quantity}`).join("\n");
+    const text = `*GURU NANAK OIL AGENCY - BOOKING CONFIRMED*\n\n*Order ID:* ${bookingId}\n*Customer:* ${name}\n*Phone:* ${phone}\n\n*Items:*\n${itemsListStr}\n\n*Total:* ₹${grandTotal}\n*Delivery:* ₹30\n\n_Thank you for choosing us!_`;
+    const encoded = encodeURIComponent(text);
+    window.open(`https://wa.me/919876543210?text=${encoded}`, "_blank");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+      <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
+        <div className="bg-[#0a2351] text-white p-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-amber-400" />
+            <h3 className="font-black text-lg uppercase tracking-tight">Pre-Order Booking</h3>
+          </div>
+          <button onClick={onClose} className="text-white/60 hover:text-white transition-colors">
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6">
+          {isSuccess ? (
+            <div className="text-center py-6 space-y-4">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto">
+                <ShieldCheck className="w-8 h-8 text-emerald-600" />
+              </div>
+              <h4 className="text-2xl font-black text-emerald-700">Aapka Product Book Ho Gaya!</h4>
+              <p className="text-gray-700 text-sm font-bold leading-relaxed">
+                आपका प्रोडक्ट बुक हो गया है और शॉप के बिज़नेस आवर्स (<strong>Monday to Saturday 9 AM - 8 PM</strong>) में डिस्पैच किया जाएगा।
+              </p>
+              <p className="text-gray-500 text-xs font-bold bg-gray-50 p-2 rounded-lg">
+                Booking Reference ID: <strong className="text-[#0a2351] font-mono">{bookingId}</strong>
+              </p>
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
+                <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <span className="text-xs text-amber-700 font-medium">We recommend sharing this on WhatsApp with the owner for faster confirmation.</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                <button
+                  onClick={handleWhatsAppShare}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center justify-center gap-2"
+                >
+                  <MessageSquare className="w-4 h-4 fill-current" /> Share on WhatsApp
+                </button>
+                <button
+                  onClick={onClose}
+                  className="bg-gray-100 hover:bg-gray-200 text-[#0a2351] px-4 py-2 rounded-xl font-bold text-sm"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handlePreOrderSubmit} className="space-y-4">
+              <p className="text-gray-600 text-xs font-bold leading-relaxed">
+                📢 <strong>Standard Payment System is OPEN!</strong> Book your products now and pay on delivery or online.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="E.g. Rahul Sharma"
+                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm font-bold focus:border-[#0a2351] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Phone *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/[^0-9]/g, "").slice(0, 10))}
+                    placeholder="e.g. 9876543210"
+                    className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm font-bold focus:border-[#0a2351] outline-none"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Address *</label>
+                <textarea
+                  required
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="Complete delivery address (e.g. House No, Street, Area, Dewas)"
+                  className="w-full bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm font-bold focus:border-[#0a2351] outline-none resize-none"
+                  rows={3}
+                />
+              </div>
+
+              <div className="space-y-2 border-t border-gray-100 pt-3">
+                <label className="block text-[10px] font-black uppercase text-gray-500 mb-1">Selected Products</label>
+                {selectedItems.length > 0 ? (
+                  <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                    {selectedItems.map((item) => (
+                      <div key={item.id} className="flex justify-between items-center bg-gray-50 p-2 rounded-lg">
+                        <div>
+                          <p className="font-extrabold text-[#0a2351] text-xs">{item.name}</p>
+                          <p className="text-[10px] text-gray-500 font-bold">₹{item.price} × {item.quantity}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = selectedItems.map((it) => {
+                                if (it.id === item.id) {
+                                  return { ...it, quantity: Math.max(1, it.quantity - 1) };
+                                }
+                                return it;
+                              });
+                              localStorage.setItem("preorder_selected_items", JSON.stringify(updated));
+                              setSelectedItems(updated);
+                              window.dispatchEvent(new Event("preorder_items_updated"));
+                            }}
+                            className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-sm font-bold"
+                          >
+                            -
+                          </button>
+                          <span className="font-extrabold text-[#0a2351] min-w-[20px] text-center text-sm">{item.quantity}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = selectedItems.map((it) => {
+                                if (it.id === item.id) {
+                                  return { ...it, quantity: it.quantity + 1 };
+                                }
+                                return it;
+                              });
+                              localStorage.setItem("preorder_selected_items", JSON.stringify(updated));
+                              setSelectedItems(updated);
+                              window.dispatchEvent(new Event("preorder_items_updated"));
+                            }}
+                            className="w-6 h-6 rounded bg-gray-200 hover:bg-gray-300 flex items-center justify-center text-sm font-bold"
+                          >
+                            +
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = selectedItems.filter((it) => it.id !== item.id);
+                              localStorage.setItem("preorder_selected_items", JSON.stringify(updated));
+                              setSelectedItems(updated);
+                              window.dispatchEvent(new Event("preorder_items_updated"));
+                            }}
+                            className="text-rose-600 hover:text-rose-800 font-bold text-lg ml-1"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="bg-amber-50/50 border border-amber-200/60 rounded-lg p-3">
+                    <p className="text-xs font-bold text-gray-600">No products selected</p>
+                    <p className="text-[10px] text-amber-600 mt-1 uppercase font-bold">Browse catalog to add items</p>
+                  </div>
+                )}
+                <Link href="/catalog?fromPreorder=true">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem("preorder_name", name);
+                      localStorage.setItem("preorder_phone", phone);
+                      localStorage.setItem("preorder_address", address);
+                      onClose();
+                    }}
+                    className="w-full mt-2 bg-amber-500 hover:bg-amber-600 text-[#0a2351] font-black py-2 rounded-xl text-xs"
+                  >
+                    📋 {selectedItems.length > 0 ? "Add More Products" : "Browse Products"}
+                  </button>
+                </Link>
+              </div>
+
+              {selectedItems.length > 0 && (
+                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 space-y-2">
+                  <div className="flex justify-between font-bold text-gray-700 text-sm">
+                    <span>Selected Items Subtotal:</span>
+                    <span>₹{subtotal.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-gray-700 text-sm">
+                    <span>Local Home Delivery Charge:</span>
+                    <span>₹30</span>
+                  </div>
+                  <div className="flex justify-between font-black text-[#0a2351] text-lg pt-2 border-t border-gray-200">
+                    <span>Total Amount Payable:</span>
+                    <span>₹{grandTotal.toLocaleString("en-IN")}</span>
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-[10px] font-black uppercase text-gray-500 mb-2">Payment Method</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("cod")}
+                    className={`py-2 px-3 text-xs font-bold rounded-lg border-2 transition-all ${
+                      paymentMethod === "cod"
+                        ? "bg-[#0a2351] text-amber-400 border-[#0a2351]"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    COD
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("upi")}
+                    className={`py-2 px-3 text-xs font-bold rounded-lg border-2 transition-all ${
+                      paymentMethod === "upi"
+                        ? "bg-[#0a2351] text-amber-400 border-[#0a2351]"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    UPI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod("card")}
+                    className={`py-2 px-3 text-xs font-bold rounded-lg border-2 transition-all ${
+                      paymentMethod === "card"
+                        ? "bg-[#0a2351] text-amber-400 border-[#0a2351]"
+                        : "bg-white text-gray-600 border-gray-200 hover:border-gray-300"
+                    }`}
+                  >
+                    CARD
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-bold text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={selectedItems.length === 0}
+                  className={`px-6 py-2 font-black rounded-xl transition-all text-sm ${
+                    selectedItems.length === 0
+                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                      : "bg-amber-500 hover:bg-amber-600 text-[#0a2351]"
+                  }`}
+                >
+                  Confirm & Pre-Book Order
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+interface ClosedShopAlertProps {
+  onClose?: () => void;
+  showDismiss?: boolean;
+}
+
+export function ClosedShopAlert({ onClose, showDismiss = false }: ClosedShopAlertProps) {
+  const [status, setStatus] = useState(() => checkShopStatus());
+  const [openPreorder, setOpenPreorder] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setStatus(checkShopStatus());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const { isOpen, countdownSeconds, nextOpenStr, type, holidayReason } = status;
+  if (isOpen) return null;
+
+  const isHoliday = type === "holiday";
+
+  return (
+    <div className="bg-white rounded-2xl border-2 border-amber-500 shadow-xl overflow-hidden">
+      <div className="bg-amber-500 text-[#0a2351] p-5 md:p-6 text-center relative">
+        <div className="absolute top-4 right-4 flex gap-2">
+          {showDismiss && onClose && (
+            <button onClick={onClose} className="bg-black/10 hover:bg-black/20 rounded-full w-8 h-8 flex items-center justify-center font-bold">
+              ✕
+            </button>
+          )}
+        </div>
+        <div className="flex flex-col items-center justify-center gap-1">
+          {isHoliday ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xl md:text-2xl font-extrabold animate-bounce">🎉</span>
+              <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight">Festival Holiday</h2>
+              <span className="text-xl md:text-2xl font-extrabold animate-bounce">🎉</span>
+            </div>
+          ) : (
+            <h2 className="text-xl md:text-2xl font-black uppercase tracking-tight">Shop Temporarily Closed</h2>
+          )}
+          <p className="text-xs font-black uppercase tracking-widest text-[#0a2351]/70 mt-1">
+            {isHoliday ? "We will resume after the festival" : "We will be back soon"}
+          </p>
+        </div>
+      </div>
+
+      <div className="p-6 md:p-8 space-y-6">
+        <div className="grid md:grid-cols-2 gap-6 bg-gray-50 border border-gray-200 rounded-xl p-4">
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <Clock className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-black uppercase text-gray-500 mb-1">Regular Hours</h4>
+                <p className="font-bold text-gray-800 text-sm">Mon - Sat: 9:00 AM - 8:00 PM</p>
+                <p className="font-extrabold text-[#0a2351] text-xs">Sunday: CLOSED</p>
+              </div>
+            </div>
+            {holidayReason && (
+              <div className="flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-xs font-black uppercase text-gray-500 mb-1">Current Status</h4>
+                  <p className="font-extrabold text-amber-600 text-sm">{holidayReason}</p>
+                </div>
+              </div>
+            )}
+            <div className="flex items-start gap-3">
+              <Calendar className="w-5 h-5 text-[#0a2351] shrink-0 mt-0.5" />
+              <div>
+                <h4 className="text-xs font-black uppercase text-gray-500 mb-1">Next Opening</h4>
+                <p className="font-black text-[#0a2351] text-base">{nextOpenStr}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-[#0a2351] rounded-2xl p-5 text-center flex flex-col items-center justify-center">
+            <span className="text-xs font-black tracking-widest text-amber-400 uppercase mb-2">Opens In</span>
+            <div className="text-2xl md:text-3xl font-mono font-black text-white">
+              {countdownSeconds > 0 ? formatCountdown(countdownSeconds) : "00:00:00"}
+            </div>
+            <div className="text-[10px] text-white/60 font-semibold mt-1">Real-time countdown</div>
+            <p className="text-xs font-bold text-amber-100 mt-4 leading-relaxed">
+              Orders placed now are queued and will be processed immediately when shop opens.
+            </p>
+          </div>
+        </div>
+
+        <div className="text-center font-bold text-sm text-[#0a2351] max-w-md mx-auto">
+          <span className="font-extrabold block text-[#0a2351] mb-1 text-lg">🟢 24/7 Online Booking Active</span>
+          Even when our physical showroom is closed, our secure online pre-booking system is always active.
+        </div>
+
+        <div className="max-w-xl mx-auto">
+          <div className="border-2 border-amber-400 bg-amber-50/30 hover:bg-amber-50/50 transition-colors rounded-2xl p-5">
+            <div className="space-y-2">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <Calendar className="w-6 h-6 text-amber-500" />
+                <h4 className="font-black text-lg uppercase tracking-wider text-[#0a2351]">Smart Booking</h4>
+              </div>
+              <p className="text-sm font-bold text-gray-700 leading-relaxed">
+                Shop close ya Sunday ho gya hai? Don't worry! Book your products now and get them delivered first thing when we open.
+              </p>
+              <div className="text-xs text-gray-600 font-medium leading-relaxed">
+                📦 <strong>Sunday Booking:</strong> Shop Sunday ko closed hai lekin online booking active hai.<br />
+                📅 <strong>Festival/Night Booking:</strong> Holiday ke time bhi booking kar sakte hain.
+              </div>
+            </div>
+            <button
+              onClick={() => setOpenPreorder(true)}
+              className="mt-5 w-full py-3.5 bg-amber-500 hover:bg-amber-600 text-[#0a2351] font-black rounded-xl transition-colors uppercase tracking-wider text-sm"
+            >
+              📱 Book & Pay Online Now
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {openPreorder && <PreOrderModal onClose={() => setOpenPreorder(false)} />}
+    </div>
+  );
+}

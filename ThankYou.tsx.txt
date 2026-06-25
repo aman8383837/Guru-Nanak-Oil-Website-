@@ -1,0 +1,171 @@
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { CheckCircle, AlertTriangle, Coins, Home } from "lucide-react";
+import { useEffect, useState } from "react";
+
+export default function ThankYou() {
+  const [orderData, setOrderData] = useState<any>(null);
+
+  useEffect(() => {
+    const checkState = () => {
+      try {
+        const data = localStorage.getItem("guru_nanak_latest_order");
+        if (data) setOrderData(JSON.parse(data));
+      } catch (e) {}
+    };
+    checkState();
+    const interval = setInterval(checkState, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCancelOrder = () => {
+    if (!window.confirm("क्या आप वाकई अपना ऑर्डर कैंसिल करना चाहते हैं? Order cancel karne par refund request bhej di jayegi.")) {
+      return;
+    }
+    try {
+      const updatedLatest = { ...orderData, status: "CANCELLED_REQUESTED", statusMessage: "❌ Order Cancelled & Refund Request Sent! Website owner ko notification bhej diya gaya hai." };
+      setOrderData(updatedLatest);
+      localStorage.setItem("guru_nanak_latest_order", JSON.stringify(updatedLatest));
+
+      const savedOrders = localStorage.getItem("guru_nanak_orders");
+      if (savedOrders) {
+        const ordersList = JSON.parse(savedOrders);
+        const updatedOrders = ordersList.map((o: any) => {
+          if (o.orderId === orderData.orderId) {
+            return { ...o, status: "CANCELLED_REQUESTED", statusMessage: "❌ Order Cancelled & Refund Request Sent! Website owner ko notification bhej diya gaya hai." };
+          }
+          return o;
+        });
+        localStorage.setItem("guru_nanak_orders", JSON.stringify(updatedOrders));
+      }
+
+      const savedNotifs = localStorage.getItem("guru_nanak_admin_notifications");
+      const notifList = savedNotifs ? JSON.parse(savedNotifs) : [];
+      notifList.push({
+        id: "CANCEL_" + orderData.orderId,
+        orderId: orderData.orderId,
+        title: "🚨 CUSTOMER ORDER CANCELLED! (REFUND REQUEST)",
+        customer: orderData.address?.split(",")[0] || "Customer",
+        detail: `Customer has cancelled order ${orderData.orderId} and is requesting refund. Mode: ${orderData.paymentMethod}`,
+        time: new Date().toISOString(),
+        unread: true,
+        isCancellation: true,
+      });
+      localStorage.setItem("guru_nanak_admin_notifications", JSON.stringify(notifList));
+      alert("Order Cancelled! Website Owner ko refund request notification bhej diya gaya hai.");
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  if (!orderData) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <h1 className="text-3xl font-black text-[#0a2351] mb-4">No order found</h1>
+        <Link href="/catalog">
+          <Button className="bg-[#0a2351] text-white">Return to Shop</Button>
+        </Link>
+      </div>
+    );
+  }
+
+  const isCancelRequested = orderData.status === "CANCELLED_REQUESTED";
+  const isRefunded = orderData.status === "REFUNDED";
+
+  return (
+    <div className="min-h-screen bg-gray-50 py-12 px-4">
+      <div className="max-w-2xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden">
+        <div className={`p-10 text-center text-white relative transition-colors ${isCancelRequested ? "bg-rose-700" : isRefunded ? "bg-gray-600" : "bg-[#0a2351]"}`}>
+          <div className="absolute inset-0 bg-black/10 pointer-events-none" />
+          {isCancelRequested ? (
+            <AlertTriangle className="w-20 h-20 text-amber-400 mx-auto mb-6 relative z-10" />
+          ) : isRefunded ? (
+            <Coins className="w-20 h-20 text-emerald-400 mx-auto mb-6 relative z-10" />
+          ) : (
+            <CheckCircle className="w-20 h-20 text-emerald-400 mx-auto mb-6 relative z-10" />
+          )}
+          <h1 className="text-4xl font-black mb-2 relative z-10 uppercase tracking-tight">
+            {isCancelRequested ? "Order Cancelled!" : isRefunded ? "Payment Refunded!" : "Order Confirmed!"}
+          </h1>
+          <p className="text-gray-300 font-medium relative z-10">
+            {isCancelRequested ? "A refund request has been initiated." : isRefunded ? "Your money has been successfully refunded." : "Thank you for choosing Guru Nanak Oil Agency."}
+          </p>
+        </div>
+
+        <div className="p-8 md:p-12">
+          <div className="text-center mb-8 pb-8 border-b border-gray-100">
+            <p className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">Order ID</p>
+            <p className="text-3xl font-black text-[#0a2351]">{orderData.orderId}</p>
+          </div>
+
+          <div className="font-mono text-sm space-y-3 mb-8 text-gray-700">
+            {orderData.items.map((item: any) => (
+              <div key={item.id} className="flex justify-between">
+                <div>
+                  <span className="font-bold">{item.name}</span>
+                  <div className="text-gray-500 text-xs text-left">Qty: {item.quantity}</div>
+                </div>
+                <span className="font-bold">₹{(item.price * item.quantity).toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="border-t border-dashed border-gray-300 pt-4 mt-4">
+              <div className="flex justify-between mb-1">
+                <span>Subtotal</span>
+                <span>₹{orderData.subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-amber-600 mb-4">
+                <span>Delivery ({orderData.area})</span>
+                <span>₹{orderData.deliveryCharge.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-6 rounded-xl flex justify-between items-center mb-6">
+            <span className="font-bold text-gray-600 uppercase tracking-wider text-sm">Grand Total</span>
+            <span className="text-3xl font-black text-[#0a2351]">₹{orderData.grandTotal.toFixed(2)}</span>
+          </div>
+
+          {isCancelRequested && (
+            <div className="bg-rose-50 border-2 border-rose-500 rounded-2xl p-4 mb-6">
+              <p className="text-xs font-extrabold leading-relaxed">👉 <strong>Refund Request Initiated:</strong> Website owner has been notified. Your refund will be processed within 5-7 business days.</p>
+            </div>
+          )}
+
+          {isRefunded && (
+            <div className="bg-emerald-50 border-2 border-emerald-500 rounded-2xl p-4 mb-6">
+              <p className="text-xs font-extrabold leading-relaxed text-center">🎉 <strong>Refund Successful:</strong> Website manager ne aapka refund process kar diya hai.</p>
+            </div>
+          )}
+
+          {!isCancelRequested && !isRefunded && (
+            <div className="bg-amber-50 border-2 border-amber-500 rounded-2xl p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-lg">🛒</span>
+                <h3 className="font-black uppercase text-sm tracking-wider text-[#0a2351]">ORDER BOOKED & SECURED</h3>
+              </div>
+              <p className="text-xs font-extrabold leading-relaxed mb-3 text-gray-700">{orderData.statusMessage}</p>
+              <div className="bg-white/85 p-3 rounded-xl space-y-1.5 text-xs">
+                <div className="flex justify-between"><span className="text-gray-500 font-bold">Placed on:</span><span>{new Date(orderData.date).toLocaleDateString()} at {new Date(orderData.date).toLocaleTimeString()}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500 font-bold">Payment Mode:</span><span className="text-emerald-700">✅ {orderData.paymentMethod.toUpperCase()}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500 font-bold">Dispatch Status:</span><span className="text-amber-800">{orderData.isScheduled ? "⏰ Scheduled" : "📦 Standard"}</span></div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-amber-200 text-center">
+                <p className="text-[10px] text-gray-500 font-extrabold mb-2">Changed your mind?</p>
+                <button onClick={handleCancelOrder} className="bg-red-600 hover:bg-red-700 text-white text-xs font-black px-4 py-2 rounded-lg transition-colors">❌ Cancel Order & Request Refund</button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <Link href="/">
+              <Button variant="outline" className="w-full h-14 border border-gray-200 text-gray-700 font-black hover:bg-gray-50"><Home className="w-4 h-4 mr-1.5" /> Return to Home</Button>
+            </Link>
+            <Link href="/catalog">
+              <Button className="w-full h-14 bg-amber-500 hover:bg-amber-600 text-[#0a2351] font-black">Continue Shopping</Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

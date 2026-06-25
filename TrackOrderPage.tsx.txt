@@ -1,0 +1,121 @@
+import { useState, useEffect } from 'react';
+import { safeStorage } from '../utils/storage';
+import { Package, Truck, CheckCircle } from 'lucide-react';
+ 
+export const TrackOrderPage = () => {
+  const [orderId, setOrderId] = useState('');
+  const [order, setOrder] = useState<any>(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    // Enable direct order tracking via ?id=ORD... query parameter
+    const searchParams = new URLSearchParams(window.location.search);
+    const queryId = searchParams.get('id');
+    if (queryId) {
+      setOrderId(queryId);
+      const orders = safeStorage.get<any[]>('guru_nanak_orders', []);
+      const found = orders.find(o => o.id === queryId || o.orderId === queryId);
+      if (found) {
+        setOrder(found);
+        setError('');
+      } else {
+        setError('Order not found. Please check your Order ID.');
+      }
+    }
+  }, []);
+ 
+  const handleTrack = () => {
+    const orders = safeStorage.get<any[]>('guru_nanak_orders', []);
+    const found = orders.find(o => o.id === orderId || o.orderId === orderId);
+    if (found) {
+      setOrder(found);
+      setError('');
+    } else {
+      setOrder(null);
+      setError('Order not found. Please check your Order ID.');
+    }
+  };
+ 
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'pending': return <Package className="w-8 h-8 text-amber-500" />;
+      case 'shipped': return <Truck className="w-8 h-8 text-primary" />;
+      case 'delivered': return <CheckCircle className="w-8 h-8 text-green-500" />;
+      default: return <Package className="w-8 h-8 text-gray-400" />;
+    }
+  };
+ 
+  return (
+    <div className="container max-w-2xl mx-auto px-4 py-16">
+      <h1 className="text-3xl font-black text-primary uppercase mb-8">Track Order</h1>
+ 
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-8">
+        <div className="flex gap-3">
+          <input
+            type="text"
+            value={orderId}
+            onChange={(e) => setOrderId(e.target.value)}
+            placeholder="Enter Order ID (e.g. ORD-1234567890)"
+            className="flex-1 bg-gray-50 border border-gray-200 rounded-xl p-4 font-bold"
+          />
+          <button
+            onClick={handleTrack}
+            className="px-6 bg-primary hover:bg-amber-500 text-white font-black rounded-xl transition-colors"
+          >
+            Track
+          </button>
+        </div>
+        {error && <p className="mt-3 text-red-600 font-bold text-sm">{error}</p>}
+      </div>
+ 
+      {order && (
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+          <div className="flex items-center gap-4 mb-6">
+            {getStatusIcon(order.status || 'pending')}
+            <div>
+              <h2 className="text-xl font-black text-primary">{order.id || order.orderId}</h2>
+              <p className="text-sm font-bold text-gray-500 uppercase">{order.status || 'pending'}</p>
+            </div>
+          </div>
+ 
+          <div className="space-y-4">
+            <div className="flex justify-between py-2 border-b border-gray-100">
+              <span className="text-gray-600 font-medium">Items</span>
+              <span className="font-bold">{(order.items || []).length}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-gray-100">
+              <span className="text-gray-600 font-medium">Grand Total</span>
+              <span className="font-black text-primary">Rs.{order.grandTotal || order.price || order.totalPrice}</span>
+            </div>
+            <div className="flex justify-between py-2 border-b border-gray-100">
+              <span className="text-gray-600 font-medium">Address</span>
+              <span className="font-bold text-right max-w-xs">{order.address}</span>
+            </div>
+            <div className="flex justify-between py-2">
+              <span className="text-gray-600 font-medium">Ordered On</span>
+              <span className="font-bold">{order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}</span>
+            </div>
+          </div>
+ 
+          {/* Status Timeline */}
+          <div className="mt-8">
+            <div className="flex items-center gap-4">
+              <div className={`w-4 h-4 rounded-full ${order.status !== 'pending' ? 'bg-green-500' : 'bg-amber-500'}`} />
+              <span className="font-bold">Order Placed</span>
+            </div>
+            <div className="ml-2 w-0.5 h-8 bg-gray-200" />
+            <div className="flex items-center gap-4">
+              <div className={`w-4 h-4 rounded-full ${(order.status === 'shipped' || order.status === 'delivered') ? 'bg-green-500' : 'bg-gray-200'}`} />
+              <span className={`font-bold ${order.status === 'pending' ? 'text-gray-400' : ''}`}>Shipped</span>
+            </div>
+            <div className="ml-2 w-0.5 h-8 bg-gray-200" />
+            <div className="flex items-center gap-4">
+              <div className={`w-4 h-4 rounded-full ${order.status === 'delivered' ? 'bg-green-500' : 'bg-gray-200'}`} />
+              <span className={`font-bold ${order.status !== 'delivered' ? 'text-gray-400' : ''}`}>Delivered</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

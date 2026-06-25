@@ -1,0 +1,83 @@
+import { useState, useEffect } from "react";
+
+export type RequestStatus = "WAITING FOR OWNER" | "APPROVED" | "CANCELLED";
+
+export interface OrderRequest {
+  id: string;
+  date: string;
+  productId: string;
+  productName: string;
+  requestedGrade: string;
+  requestedQuantity: number;
+  totalPrice: number;
+  status: RequestStatus;
+  rejectReason?: string;
+  customerName?: string;
+  customerPhone?: string;
+  customerAddress?: string;
+  unit: string;
+}
+
+const DEFAULT_REQUESTS: OrderRequest[] = [
+  {
+    id: "REQ-1001",
+    date: new Date().toISOString(),
+    productId: "castrol-power1-ultimate",
+    productName: "Castrol Power1 Ultimate 4T",
+    requestedGrade: "10W-30",
+    requestedQuantity: 2,
+    totalPrice: 900,
+    status: "WAITING FOR OWNER",
+    unit: "Litre",
+  },
+  {
+    id: "REQ-1002",
+    date: new Date(Date.now() - 86400000).toISOString(),
+    productId: "castrol-edge",
+    productName: "Castrol EDGE",
+    requestedGrade: "5W-40",
+    requestedQuantity: 1,
+    totalPrice: 850,
+    status: "APPROVED",
+    unit: "Litre",
+  },
+];
+
+export function useRequests() {
+  const [requests, setRequests] = useState<OrderRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem("cnc_order_requests");
+      if (saved) return JSON.parse(saved);
+      localStorage.setItem("cnc_order_requests", JSON.stringify(DEFAULT_REQUESTS));
+      return DEFAULT_REQUESTS;
+    } catch (e) {
+      return DEFAULT_REQUESTS;
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("cnc_order_requests", JSON.stringify(requests));
+  }, [requests]);
+
+  const addRequest = (req: Omit<OrderRequest, "id" | "date">) => {
+    const newReq: OrderRequest = {
+      ...req,
+      id: `REQ-${Math.floor(1000 + Math.random() * 9000)}`,
+      date: new Date().toISOString(),
+    };
+    setRequests((prev) => [newReq, ...prev]);
+    return newReq;
+  };
+
+  const updateRequestStatus = (id: string, status: RequestStatus, rejectReason?: string) => {
+    setRequests((prev) =>
+      prev.map((req) => (req.id === id ? { ...req, status, rejectReason } : req))
+    );
+  };
+
+  const removeRequest = (id: string) => {
+    setRequests((prev) => prev.filter((req) => req.id !== id));
+  };
+
+  return { requests, addRequest, updateRequestStatus, removeRequest };
+}

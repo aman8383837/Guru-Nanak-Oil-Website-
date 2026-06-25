@@ -1,0 +1,334 @@
+import { useState, useEffect } from "react";
+import { Link, useSearch } from "wouter";
+import { PRODUCTS, BOSCH_FILTERS, Product, BRANDS, getBrandTheme } from "@/data/mockProducts";
+import { Droplet, Info, Package, Settings, Settings2, Truck, Car, Tractor, ShoppingCart } from "lucide-react";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useCart } from "@/hooks/useCart";
+import { ProductAddToCart } from "@/components/ProductAddToCart";
+
+// Product images from Unsplash
+const engineOilImg = "https://images.unsplash.com/photo-1620888200661-0ad8";
+const greaseTubImg = "https://images.unsplash.com/photo-1615904803986-1e6e";
+const coolantBottleImg = "https://images.unsplash.com/photo-1550989460-0ad";
+const brakeOilImg = "https://images.unsplash.com/photo-1606523298642-4fcf3";
+const filterImg = "https://images.unsplash.com/photo-1590216790938-1a52e5c";
+const premiumMineralImg = "https://images.unsplash.com/photo-1620888200661";
+const ultraSyntheticImg = "https://images.unsplash.com/photo-1620888200661";
+const heavyDutyCf4Img = "https://images.unsplash.com/photo-1620888200661-0";
+const castrolP110w30Img = "https://images.unsplash.com/photo-1620888200661";
+const castrolP110w40Img = "https://images.unsplash.com/photo-1620888200661";
+const castrolP115w50Img = "https://images.unsplash.com/photo-1620888200661";
+const castrolP14t10w30Img = "https://images.unsplash.com/photo-16208882006";
+const castrolActiv20w40Img = "https://images.unsplash.com/photo-1620888200";
+const castrolActiv10w30Img = "https://images.unsplash.com/photo-1620888200";
+const castrolActivScooter10w30Img = "https://images.unsplash.com/photo-162";
+const castrolEdge5w40Img = "https://images.unsplash.com/photo-162088820066";
+const castrolMagnatecSuv5w30Img = "https://images.unsplash.com/photo-16208";
+const castrolGtxEssential20w50Img = "https://images.unsplash.com/photo-162";
+const castrolGtxEco5w30Img = "https://images.unsplash.com/photo-1620888200";
+const castrolGtxSuv15w40Img = "https://images.unsplash.com/photo-162088820";
+const castrolMagnatec5w30Img = "https://images.unsplash.com/photo-16208882";
+const castrolCrbEssential15w40Img = "https://images.unsplash.com/photo-162";
+const castrolCrbMulti15w40Img = "https://images.unsplash.com/photo-1620888";
+const castrolCrbPrimaImg = "https://images.unsplash.com/photo-162088820066";
+const castrolCrbTurbomaxImg = "https://images.unsplash.com/photo-162088820";
+
+export default function Catalog() {
+  const { cartCount, setIsCartOpen } = useCart();
+  const searchString = useSearch();
+  const searchParams = new URLSearchParams(searchString);
+  const brandIdParam = searchParams.get("brandId");
+  const isFromPreorder = searchString.includes("fromPreorder=true");
+  const [preorderItemsCount, setPreorderItemsCount] = useState(0);
+  const [preorderName, setPreorderName] = useState(() => {
+    return typeof window !== "undefined" ? localStorage.getItem("preorder_name") || "" : "";
+  });
+
+  useEffect(() => {
+    if (isFromPreorder && typeof window !== "undefined") {
+      const updateCount = () => {
+        try {
+          const itemsJson = localStorage.getItem("preorder_selected_items");
+          const items = itemsJson ? JSON.parse(itemsJson) : [];
+          const count = items.reduce((acc: number, item: any) => acc + item.quantity, 0);
+          setPreorderItemsCount(count);
+        } catch (e) {}
+      };
+      updateCount();
+      window.addEventListener("preorder_items_updated", updateCount);
+      return () => window.removeEventListener("preorder_items_updated", updateCount);
+    }
+  }, [isFromPreorder]);
+
+  const [activeCategory, setActiveCategory] = useState<"Oils" | "Greases" | "Coolants" | "Brake Oils">("Oils");
+  const [activeOilCategory, setActiveOilCategory] = useState<"Two Wheeler" | "Cars" | "Trucks" | "Tractor" | null>("Two Wheeler");
+  const [filterVehicleType, setFilterVehicleType] = useState<"Truck" | "Car" | "Tractor">("Car");
+  const brands = BRANDS || [];
+  const selectedBrandId = brandIdParam ? parseInt(brandIdParam, 10) : brands[0]?.id;
+  const activeBrand = brands.find((b) => b.id === selectedBrandId);
+  const brandProducts = PRODUCTS.filter((p) => p.brandId === selectedBrandId);
+  const currentCategoryProducts = brandProducts.filter((p) => {
+    if (p.category !== activeCategory) return false;
+    if (activeCategory === "Oils" && activeOilCategory !== null) {
+      if (p.vehicleCategory) {
+        return p.vehicleCategory === activeOilCategory;
+      }
+      return false;
+    }
+    return true;
+  });
+
+  const isBosch = activeBrand?.name?.toLowerCase().includes("bosch");
+  const matchingFilters = BOSCH_FILTERS.filter((f) => f.vehicleType === filterVehicleType);
+  const getFilterImage = (name: string) => filterImg;
+
+  const getProductImage = (brandName: string, category: string, productName?: string) => {
+    const bName = brandName.toLowerCase();
+    const pName = (productName || "").toLowerCase();
+    if (category === "Oils") {
+      if (bName.includes("castrol") && pName) {
+        if (pName.includes("crb essential")) return castrolCrbEssential15w40Img;
+        if (pName.includes("crb multi")) return castrolCrbMulti15w40Img;
+        if (pName.includes("crb prima")) return castrolCrbPrimaImg;
+        if (pName.includes("crb turbomax")) return castrolCrbTurbomaxImg;
+        if (pName.includes("edge")) return castrolEdge5w40Img;
+        if (pName.includes("magnatec suv")) return castrolMagnatecSuv5w30Img;
+        if (pName.includes("magnatec")) return castrolMagnatec5w30Img;
+        if (pName.includes("gtx essential")) return castrolGtxEssential20w50Img;
+        if (pName.includes("gtx eco")) return castrolGtxEco5w30Img;
+        if (pName.includes("gtx suv")) return castrolGtxSuv15w40Img;
+        if (pName.includes("activ scooter")) return castrolActivScooter10w30Img;
+        if (pName.includes("activ 4t")) return castrolActiv20w40Img;
+        if (pName.includes("power1 ultimate")) return castrolP110w30Img;
+        if (pName.includes("power1 4t")) return castrolP14t10w30Img;
+      }
+      if (pName.includes("premium")) return premiumMineralImg;
+      if (pName.includes("synthetic")) return ultraSyntheticImg;
+      if (pName.includes("heavy duty fleet")) return heavyDutyCf4Img;
+      return premiumMineralImg;
+    }
+    switch (category) {
+      case "Greases": return greaseTubImg;
+      case "Coolants": return coolantBottleImg;
+      case "Brake Oils": return brakeOilImg;
+      default: return engineOilImg;
+    }
+  };
+
+  return (
+    <div className={`min-h-screen bg-gray-50 ${isFromPreorder ? "pb-36" : ""}`}>
+      <div className="bg-[#0a2351] text-white pt-10 pb-20 px-4 relative">
+        <div className="container max-w-7xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <Link href="/">
+              <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">
+                ← Back to Home
+              </Button>
+            </Link>
+            <button onClick={() => setIsCartOpen(true)} className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center relative transition-colors">
+              <ShoppingCart className="w-5 h-5" />
+              {cartCount > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{cartCount}</span>}
+            </button>
+          </div>
+          <div className="flex flex-col md:flex-row items-baseline gap-4 mb-4">
+            <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight">Product Catalog</h1>
+            {activeBrand && <span className="text-amber-500 font-bold tracking-wide">{activeBrand.name}</span>}
+          </div>
+          <p className="text-gray-300 font-medium">Browse our comprehensive range of premium automotive lubricants.</p>
+        </div>
+      </div>
+
+      <div className="container max-w-7xl mx-auto px-4 -mt-10 relative z-10">
+        <div className="bg-white rounded-2xl shadow-md border border-gray-100 p-4 flex gap-2 overflow-x-auto mb-8">
+          {brands.map((brand) => (
+            <Link key={brand.id} href={`/catalog?brandId=${brand.id}`}>
+              <button className={`flex-shrink-0 px-6 py-4 rounded-xl font-extrabold text-sm transition-all ${selectedBrandId === brand.id ? "bg-[#0a2351] text-white" : "bg-gray-50 text-gray-600 hover:bg-gray-100"}`}>
+                {brand.name}
+              </button>
+            </Link>
+          ))}
+        </div>
+
+        {isBosch ? (
+          <div className="space-y-12">
+            <div className="text-center max-w-2xl mx-auto mb-12">
+              <h2 className="text-3xl font-black text-[#0a2351] uppercase tracking-tight">Bosch Filters</h2>
+              <p className="text-gray-600 font-medium">Find the perfect original filter for your vehicle.</p>
+            </div>
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex flex-wrap gap-6 mb-12 justify-center">
+                <button onClick={() => setFilterVehicleType("Truck")} className={`relative overflow-hidden rounded-xl transition-all ${filterVehicleType === "Truck" ? "ring-4 ring-amber-500" : ""}`}>
+                  <img src="https://images.unsplash.com/photo-1601584115" alt="Truck" className="w-32 h-24 object-cover" />
+                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Truck</span>
+                </button>
+                <button onClick={() => setFilterVehicleType("Car")} className={`relative overflow-hidden rounded-xl transition-all ${filterVehicleType === "Car" ? "ring-4 ring-amber-500" : ""}`}>
+                  <img src="https://images.unsplash.com/photo-1552519507" alt="Car" className="w-32 h-24 object-cover" />
+                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Car</span>
+                </button>
+                <button onClick={() => setFilterVehicleType("Tractor")} className={`relative overflow-hidden rounded-xl transition-all ${filterVehicleType === "Tractor" ? "ring-4 ring-amber-500" : ""}`}>
+                  <img src="https://images.unsplash.com/photo-1533900298" alt="Tractor" className="w-32 h-24 object-cover" />
+                  <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Tractor</span>
+                </button>
+              </div>
+              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {matchingFilters.length > 0 ? (
+                  matchingFilters.map((filter) => (
+                    <Card key={filter.id} className="p-0 border border-gray-200 overflow-hidden">
+                      <div className="h-48 w-full relative bg-slate-50 flex items-center justify-center">
+                        <img src={getFilterImage(filter.name)} className="w-full h-full object-cover" alt={filter.name} />
+                        <div className="absolute top-0 left-0 right-0 bg-[#005691] text-white text-xs font-black py-1 px-3 flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                          BOSCH ORIGINAL AUTOMOTIVE FILTER
+                        </div>
+                      </div>
+                      <div className="p-6">
+                        <h4 className="font-black text-lg text-[#0a2351] mb-2">{filter.name}</h4>
+                        <div className="bg-red-50 text-red-700 text-xs font-bold px-3 py-1 rounded-full mb-3 inline-block">For: {filter.vehicleModelOrName}</div>
+                        <p className="text-sm text-gray-600 font-medium mb-4">{filter.description}</p>
+                        <ProductAddToCart product={{ id: filter.id, name: filter.name + " (" + filter.vehicleModelOrName + ")", price: filter.price, stock_quantity: filter.stock_quantity, image: getFilterImage(filter.name), unit: filter.unit }} />
+                      </div>
+                    </Card>
+                  ))
+                ) : (
+                  <div className="col-span-full text-center py-12 text-gray-500 font-bold">No filters found for this category.</div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-12">
+            <div className="flex flex-wrap gap-2 justify-center mb-8">
+              {(["Oils", "Greases", "Coolants", "Brake Oils"] as const).map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    if (cat !== "Oils") setActiveOilCategory(null);
+                    else if (activeOilCategory === null) setActiveOilCategory("Two Wheeler");
+                  }}
+                  className={`px-8 py-3 rounded-full font-bold text-sm uppercase tracking-wider transition-all ${activeCategory === cat ? "bg-[#0a2351] text-white" : "bg-white text-gray-600 border border-gray-200 hover:border-gray-300"}`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {activeCategory === "Oils" && (
+              <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                <div className="flex flex-wrap gap-4 md:gap-6 justify-center">
+                  <button onClick={() => setActiveOilCategory("Two Wheeler")} className={`relative overflow-hidden rounded-xl transition-all ${activeOilCategory === "Two Wheeler" ? "ring-4 ring-amber-500" : ""}`}>
+                    <img src="https://images.unsplash.com/photo-1558981403" alt="Two Wheeler" className="w-40 h-28 object-cover" />
+                    <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Two Wheeler</span>
+                  </button>
+                  <button onClick={() => setActiveOilCategory("Cars")} className={`relative overflow-hidden rounded-xl transition-all ${activeOilCategory === "Cars" ? "ring-4 ring-amber-500" : ""}`}>
+                    <img src="https://images.unsplash.com/photo-1552519507" alt="Cars" className="w-40 h-28 object-cover" />
+                    <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Cars</span>
+                  </button>
+                  <button onClick={() => setActiveOilCategory("Trucks")} className={`relative overflow-hidden rounded-xl transition-all ${activeOilCategory === "Trucks" ? "ring-4 ring-amber-500" : ""}`}>
+                    <img src="https://images.unsplash.com/photo-1601584115" alt="Trucks" className="w-40 h-28 object-cover" />
+                    <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Trucks</span>
+                  </button>
+                  <button onClick={() => setActiveOilCategory("Tractor")} className={`relative overflow-hidden rounded-xl transition-all ${activeOilCategory === "Tractor" ? "ring-4 ring-amber-500" : ""}`}>
+                    <img src="https://images.unsplash.com/photo-1533900298" alt="Tractor" className="w-40 h-28 object-cover" />
+                    <span className="absolute inset-0 bg-black/40 flex items-center justify-center font-black text-white uppercase text-sm">Tractor</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="grid lg:grid-cols-2 gap-8">
+              {currentCategoryProducts.length > 0 ? (
+                currentCategoryProducts.map((product) => {
+                  const theme = getBrandTheme(activeBrand?.name || "");
+                  const isCastrolOriginal = activeBrand?.name?.toLowerCase().includes("castrol");
+                  return (
+                    <Card key={product.id} className="group overflow-hidden border border-gray-200 hover:shadow-lg transition-all">
+                      <div className="w-full sm:w-64 bg-slate-200 shrink-0 relative overflow-hidden">
+                        <img src={getProductImage(activeBrand?.name || "", product.category, product.name)} alt={product.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" referrerPolicy="no-referrer" />
+                        <div className={`absolute top-0 left-0 right-0 ${theme.primary} text-white text-xs font-black py-1 px-3 flex items-center gap-2`}>
+                          <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                          {activeBrand?.name || "Premium Lube"} GENUINE LUBRICANT
+                        </div>
+                      </div>
+                      <div className="p-6 md:p-8 flex-1 flex flex-col bg-white relative">
+                        <div className="absolute inset-0 pointer-events-none opacity-5">
+                          <img src={getProductImage(activeBrand?.name || "", product.category, product.name)} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        </div>
+                        <div className="absolute inset-0 bg-white/80 pointer-events-none" />
+                        <div className="relative z-10 flex items-start justify-between mb-2">
+                          <h3 className="text-2xl font-black text-[#0a2351]">{product.name}</h3>
+                        </div>
+                        <p className="relative z-10 text-gray-700 text-sm font-medium mb-4">{product.description}</p>
+                        <div className="relative z-10 space-y-4 text-sm mb-4">
+                          {product.type && (
+                            <div className="flex items-center gap-3">
+                              <Settings className="w-4 h-4 text-[#0a2351]" />
+                              <span className="text-gray-600 font-medium">Type:</span>
+                              <span className="font-black text-[#0a2351]">{product.type}</span>
+                            </div>
+                          )}
+                          {product.grades && (
+                            <div className="flex items-start gap-3">
+                              <Package className="w-4 h-4 text-[#0a2351] mt-0.5" />
+                              <span className="text-gray-600 font-medium">Available Grades:</span>
+                              <div className="flex flex-wrap gap-2">
+                                {product.grades.map((g) => (
+                                  <span key={g.name} className="bg-white/90 border border-gray-200 px-2 py-1 rounded text-xs font-bold">{g.name}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <ProductAddToCart product={{ id: product.id, name: product.name, price: product.price, stock_quantity: product.stock_quantity, image: getProductImage(activeBrand?.name || "", product.category, product.name), unit: product.unit, grades: product.grades, vehicleCategory: product.vehicleCategory }} />
+                      </div>
+                    </Card>
+                  );
+                })
+              ) : (
+                <div className="col-span-full py-20 text-center bg-white rounded-2xl border border-gray-200">
+                  <Droplet className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                  <p className="font-medium text-lg text-gray-500">No products available in this category.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gradient-to-r from-amber-500 to-amber-600 rounded-2xl p-8 md:p-12 text-white relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-10">
+                <Info className="w-32 h-32 text-white" />
+              </div>
+              <h3 className="text-2xl md:text-3xl font-black text-[#0a2351] mb-4 relative z-10">100% Genuine Guarantee</h3>
+              <p className="text-[#0a2351]/80 font-medium mb-8 max-w-2xl relative z-10">We provide 100% original, authenticated lubricants with full manufacturer warranty.</p>
+              <a href="tel:+919876543210" className="inline-block relative z-10">
+                <Button className="bg-[#0a2351] hover:bg-[#0a2351]/95 text-white font-black">Call for Product Inquiry</Button>
+              </a>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {isFromPreorder && (
+        <div className="fixed bottom-0 left-0 right-0 bg-[#0a2351] text-white p-4 z-40">
+          <div className="container max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500 text-[#0a2351] flex items-center justify-center font-black text-lg">📋</div>
+              <div>
+                <p className="font-extrabold text-white text-sm md:text-base">Pre-Ordering for <span className="text-amber-400 font-black">{preorderName || "Guest"}</span></p>
+                <p className="text-xs text-gray-300 font-bold mt-0.5">
+                  {preorderItemsCount > 0 ? `Selected ${preorderItemsCount} item(s) so far. Click to continue.` : "No items selected yet. Select products below to add to pre-order."}
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <Link href="/?preorderOpen=true" className="w-full md:w-auto">
+                <button disabled={preorderItemsCount === 0} className={`w-full md:w-auto px-8 py-3.5 text-xs font-black rounded-xl transition-all ${preorderItemsCount === 0 ? "bg-gray-400 text-gray-700 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 hover:scale-[1.02] text-[#0a2351]"}`}>
+                  Continue to Pre-Order →
+                </button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

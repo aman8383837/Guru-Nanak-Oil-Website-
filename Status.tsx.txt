@@ -1,0 +1,72 @@
+import { useRequests } from "../hooks/useRequests";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Link } from "wouter";
+import { Clock, CheckCircle2, XCircle } from "lucide-react";
+
+export default function Status() {
+  const { requests } = useRequests();
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="bg-[#0a2351] text-white pt-10 pb-16 px-4">
+        <div className="container max-w-4xl mx-auto">
+          <div className="flex justify-between items-center mb-6">
+            <Link href="/catalog">
+              <Button variant="outline" className="border-white/20 text-white hover:bg-white/10">← Back to Shop</Button>
+            </Link>
+          </div>
+          <h1 className="text-4xl md:text-5xl font-black uppercase tracking-tight">Track Your Request</h1>
+          <p className="text-gray-300 font-medium mt-2">Track your special order requests with the owner.</p>
+        </div>
+      </div>
+      <div className="container max-w-4xl mx-auto px-4 -mt-8 space-y-4">
+        {requests.length === 0 ? (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 text-center">
+            <p className="text-gray-500 font-bold mb-4">No requests found</p>
+            <Link href="/catalog">
+              <Button className="bg-[#0a2351] text-white">Browse Products</Button>
+            </Link>
+          </div>
+        ) : (
+          requests.map((req) => (
+            <Card key={req.id} className="p-6 rounded-2xl border-2 border-gray-100 relative overflow-hidden">
+              {req.status === "WAITING FOR OWNER" && <div className="absolute top-0 left-0 w-1 h-full bg-amber-500" />}
+              {req.status === "APPROVED" && <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500" />}
+              {req.status === "CANCELLED" && <div className="absolute top-0 left-0 w-1 h-full bg-rose-500" />}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-xs font-black text-gray-400">ID: {req.id}</span>
+                    <span className="text-xs text-gray-300">•</span>
+                    <span className="text-xs font-medium text-gray-500">{new Date(req.date).toLocaleDateString()}</span>
+                  </div>
+                  <h3 className="font-black text-xl text-[#0a2351]">{req.productName}</h3>
+                  <div className="flex gap-4 text-sm font-bold text-gray-500">
+                    <span>Grade: <span className="text-gray-900">{req.requestedGrade}</span></span>
+                    <span>Qty: <span className="text-gray-900">{req.requestedQuantity}</span></span>
+                    <span>Total: <span className="text-[#0a2351]">₹{req.totalPrice}</span></span>
+                  </div>
+                </div>
+                <div className="md:text-right">
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-xs font-black ${req.status === "WAITING FOR OWNER" ? "bg-amber-100 text-amber-700 border border-amber-200" : req.status === "APPROVED" ? "bg-emerald-100 text-emerald-700 border border-emerald-200" : "bg-rose-100 text-rose-700 border border-rose-200"}`}>
+                    {req.status === "WAITING FOR OWNER" && <Clock className="w-4 h-4" />}
+                    {req.status === "APPROVED" && <CheckCircle2 className="w-4 h-4" />}
+                    {req.status === "CANCELLED" && <XCircle className="w-4 h-4" />}
+                    {req.status}
+                  </div>
+                  {req.status === "CANCELLED" && req.rejectReason && (
+                    <p className="text-xs font-bold text-rose-600 mt-2 bg-rose-50 p-2 rounded-lg">Reason: {req.rejectReason}</p>
+                  )}
+                  {req.status === "APPROVED" && (
+                    <p className="text-xs font-bold text-emerald-600 mt-2">Please visit the shop or contact owner for payment & pickup.</p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
